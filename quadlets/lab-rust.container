@@ -1,7 +1,5 @@
 [Unit]
 Description=Rust portable development environment
-After=lab-net.network
-Requires=lab-net.network
 
 [Container]
 Image=docker.io/library/rust:slim

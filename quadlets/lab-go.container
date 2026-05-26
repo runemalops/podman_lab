@@ -1,7 +1,5 @@
 [Unit]
 Description=Go 1.23 portable development environment
-After=lab-net.network
-Requires=lab-net.network
 
 [Container]
 Image=docker.io/library/golang:1.23

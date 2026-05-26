@@ -1,7 +1,5 @@
 [Unit]
 Description=Python 3.12 portable development environment
-After=lab-net.network
-Requires=lab-net.network
 
 [Container]
 Image=docker.io/library/python:3.12-slim

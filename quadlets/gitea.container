@@ -1,7 +1,7 @@
 [Unit]
 Description=Gitea self-hosted Git service with LFS
-After=lab-net.network postgres.service redis.service
-Requires=lab-net.network postgres.service redis.service
+After=postgres.service redis.service
+Requires=postgres.service redis.service
 
 [Container]
 Image=docker.io/gitea/gitea:latest

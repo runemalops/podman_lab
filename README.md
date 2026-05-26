@@ -49,7 +49,7 @@ DEPLOY  -> systemctl --user restart <quadlet>
 
 ### Prerequisites
 
-- Podman >= 4.6
+- Podman >= 4.6 (known to work with 4.9; quadlet `.network`/`.volume` files must omit `Description` key for compatibility)
 - systemd --user available
 - `loginctl enable-linger $USER` (run automatically by setup)
 
@@ -66,11 +66,16 @@ cd podman-lab
 2. Creates `~/.local/share/podman-lab/` directory tree
 3. Generates random secrets → `secrets.env` (chmod 600)
 4. Generates PostgreSQL init script with matching passwords
-5. Interpolates `__USER__`, `__UID__`, `__DOMAIN__` in quadlet files
+5. Interpolates `__USER__`, `__UID__`, `__DOMAIN__` placeholders in quadlet files
 6. Copies quadlets → `~/.config/containers/systemd/`
 7. Copies systemd timer → `~/.config/systemd/user/`
 8. Runs `systemctl --user daemon-reload`
 9. Prints post-setup instructions
+
+> **Note**: Host volume paths in quadlet files use `%h` (systemd home-directory
+> specifier) rather than `__USER__` — this avoids relative-path issues and is
+> compatible with podman's Quadlet generator. The `__USER__` placeholder is
+> still used for non-path interpolation (e.g., `Environment=USER_UID=__UID__`).
 
 ### Start Services
 
@@ -199,9 +204,17 @@ podman-lab/
 └── LICENSE
 ```
 
-All user-specific paths use `__USER__` / `__UID__` placeholders, replaced
-at deploy time by `setup.sh`. This makes the repo portable — clone, run
-`./setup.sh`, and the lab deploys on any machine.
+Host volume paths use the `%h` systemd specifier (resolves to `$HOME` at
+runtime), while `__USER__`, `__UID__`, and `__DOMAIN__` placeholders are
+replaced at deploy time by `setup.sh`. This makes the repo portable —
+clone, run `./setup.sh`, and the lab deploys on any machine.
+
+> **Podman 4.9 compatibility**: Quadlet `.network` and `.volume` files in
+> this repo omit the `Description` key, which podman 4.9's quadlet generator
+> does not support in `[Network]`/`[Volume]` sections. Container `[Unit]`
+> sections avoid `After=`/`Requires=` references to `.network` and `.volume`
+> units — the `Network=` and `Volume=` keys in `[Container]` handle
+> dependencies automatically.
 
 ## Troubleshooting
 

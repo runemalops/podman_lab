@@ -1,2 +1,1 @@
 [Volume]
-Description=Persistent data volume for Gitea (repos, LFS, config, DB)

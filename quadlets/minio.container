@@ -1,7 +1,5 @@
 [Unit]
 Description=MinIO S3-compatible object storage
-After=lab-net.network
-Requires=lab-net.network
 
 [Container]
 Image=docker.io/minio/minio:latest

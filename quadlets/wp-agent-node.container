@@ -1,7 +1,6 @@
 [Unit]
 Description=Woodpecker CI agent — Node.js
-After=lab-net.network woodpecker-server.service
-Requires=lab-net.network
+After=woodpecker-server.service
 
 [Container]
 Image=docker.io/woodpeckerci/woodpecker-agent:latest

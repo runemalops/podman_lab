@@ -18,9 +18,10 @@ Quadlets as systemd services.
 ## Key Conventions
 
 ### Placeholder pattern
-- `__USER__` → replaced with `$USER` by `setup.sh`
+- `__USER__` → replaced with `$USER` by `setup.sh` (non-path uses only)
 - `__UID__` → replaced with `$(id -u)` by `setup.sh`
 - `__DOMAIN__` → replaced with domain (default `runemal.cloud`)
+- Host volume paths use `%h` (systemd `$HOME` specifier), NOT `__USER__`
 - NEVER hardcode usernames or UIDs in quadlet files
 
 ### Path layout
@@ -49,15 +50,13 @@ Quadlets as systemd services.
 ```ini
 [Unit]
 Description=...
-After=lab-net.network postgres.service
-Requires=lab-net.network postgres.service
 
 [Container]
 Image=docker.io/org/image:tag
 ContainerName=svc-name
 Network=lab-net.network
 PublishPort=3000:3000
-Volume=__USER__/.local/share/podman-lab/svc:/data:Z
+Volume=%h/.local/share/podman-lab/svc:/data:Z
 EnvironmentFile=%h/.local/share/podman-lab/secrets.env
 Environment=KEY=static-value
 
