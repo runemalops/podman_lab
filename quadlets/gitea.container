@@ -7,6 +7,8 @@ Requires=postgres.service redis.service
 Image=docker.io/gitea/gitea:latest
 ContainerName=gitea
 Network=lab-net.network
+IP=10.89.1.4
+PodmanArgs=--add-host=postgres:10.89.1.2 --add-host=redis:10.89.1.3
 PublishPort=3000:3000
 Volume=gitea.volume:/data:Z
 Environment=USER_UID=__UID__

@@ -6,6 +6,7 @@ After=woodpecker-server.service
 Image=docker.io/woodpeckerci/woodpecker-agent:v3
 ContainerName=wp-agent-go
 Network=lab-net.network
+PodmanArgs=--add-host=woodpecker-server:10.89.1.5
 Volume=/run/user/__UID__/podman/podman.sock:/var/run/docker.sock:Z
 Environment=WOODPECKER_SERVER=woodpecker-server:9000
 Environment=WOODPECKER_MAX_WORKFLOWS=1
