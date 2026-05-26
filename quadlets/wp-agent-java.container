@@ -3,7 +3,7 @@ Description=Woodpecker CI agent — Java
 After=woodpecker-server.service
 
 [Container]
-Image=docker.io/woodpeckerci/woodpecker-agent:latest
+Image=docker.io/woodpeckerci/woodpecker-agent:v3
 ContainerName=wp-agent-java
 Network=lab-net.network
 Volume=/run/user/__UID__/podman/podman.sock:/var/run/docker.sock:Z

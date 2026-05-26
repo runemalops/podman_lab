@@ -4,11 +4,11 @@ After=postgres.service redis.service gitea.service
 Requires=postgres.service
 
 [Container]
-Image=docker.io/woodpeckerci/woodpecker-server:latest
+Image=docker.io/woodpeckerci/woodpecker-server:v3
 ContainerName=woodpecker-server
 Network=lab-net.network
 PublishPort=8000:8000
-PublishPort=9000:9000
+PublishPort=9002:9000
 Volume=%h/.local/share/podman-lab/woodpecker:/var/lib/woodpecker:Z
 Environment=WOODPECKER_OPEN=false
 Environment=WOODPECKER_HOST=https://ci.__DOMAIN__

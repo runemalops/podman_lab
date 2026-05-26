@@ -28,11 +28,15 @@ Internet -> Cloudflare -> Cloudflared (host network, existing tunnel)
 | **PostgreSQL** | Shared database backend | — | *internal* |
 | **Redis** | Cache & job queue | — | *internal* |
 | **Gitea** | Self-hosted Git with LFS, issues, PRs | 3000 | `git.runemal.cloud` |
-| **Woodpecker** | CI/CD server + per-language agents | 8000 | `ci.runemal.cloud` |
+| **Woodpecker** | CI/CD server + per-language agents | 8000 / 9002→9000† | `ci.runemal.cloud` |
 | **Registry** | Private container image storage | 5000 | `registry.runemal.cloud` |
 | **MinIO** | S3-compatible artifact & log storage | 9000/9001 | `minio.runemal.cloud` |
 | **Dev containers** | Python, Node, Go, Rust, Java envs | varied | *local only* |
 | **Backup** | Daily pg_dump + tar with 30-day rotation | — | *timer: 03:00* |
+
+> † Woodpecker gRPC (agent communication) — internal container port 9000 is
+> mapped to host port 9002 to avoid conflict with MinIO's S3 API on port 9000.
+> Agents connect to `woodpecker-server:9000` over the internal `lab-net` bridge.
 
 ### SDLC Pipeline
 
