@@ -1,0 +1,19 @@
+[Unit]
+Description=Rust portable development environment
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/library/rust:slim
+ContainerName=lab-rust
+Network=lab-net.network
+PublishPort=8080:8080
+Volume=%h/Projects:/workspace:Z
+Exec=sleep infinity
+
+[Service]
+Restart=always
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=default.target

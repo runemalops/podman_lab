@@ -1,0 +1,19 @@
+[Unit]
+Description=PostgreSQL 16 database server for podman-lab
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/postgres:16-alpine
+ContainerName=postgres
+Network=lab-net.network
+Volume=postgres.volume:/var/lib/postgresql/data:Z
+Volume=__USER__/.local/share/podman-lab/postgres/init.d:/docker-entrypoint-initdb.d:Z
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

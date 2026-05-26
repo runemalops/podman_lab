@@ -1,0 +1,21 @@
+[Unit]
+Description=Woodpecker CI agent — Java
+After=lab-net.network woodpecker-server.service
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/woodpeckerci/woodpecker-agent:latest
+ContainerName=wp-agent-java
+Network=lab-net.network
+Volume=/run/user/__UID__/podman/podman.sock:/var/run/docker.sock:Z
+Environment=WOODPECKER_SERVER=woodpecker-server:9000
+Environment=WOODPECKER_MAX_WORKFLOWS=1
+Environment=WOODPECKER_AGENT_LABELS=type=java
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

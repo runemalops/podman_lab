@@ -1,0 +1,22 @@
+[Unit]
+Description=MinIO S3-compatible object storage
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/minio/minio:latest
+ContainerName=minio
+Network=lab-net.network
+PublishPort=9000:9000
+PublishPort=9001:9001
+Volume=minio.volume:/data:Z
+Environment=MINIO_ROOT_USER=admin
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+Exec=server /data --console-address :9001
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

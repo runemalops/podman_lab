@@ -1,0 +1,19 @@
+[Unit]
+Description=Podman Registry v2 — local container image storage
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/registry:2
+ContainerName=registry
+Network=lab-net.network
+PublishPort=5000:5000
+Volume=registry.volume:/var/lib/registry:Z
+Volume=__USER__/.local/share/podman-lab/registry/config.yml:/etc/docker/registry/config.yml:Z,ro
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

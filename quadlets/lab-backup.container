@@ -1,0 +1,35 @@
+[Unit]
+Description=Daily backup job for podman-lab services
+After=lab-net.network postgres.service gitea.service
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/postgres:16-alpine
+ContainerName=lab-backup
+Network=lab-net.network
+Volume=__USER__/.local/share/podman-lab/backups:/backup:Z
+Volume=__USER__/.local/share/podman-lab/gitea:/data/gitea:Z,ro
+Volume=__USER__/.local/share/podman-lab/registry:/data/registry:Z,ro
+Environment=BACKUP_DIR=/backup
+Environment=RETENTION_DAYS=30
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+Exec=-/bin/sh -c "\
+  mkdir -p $BACKUP_DIR/{postgres,gitea,registry} && \
+  date=$(date +%Y%m%d) && \
+  echo \"=== Backup $date ===\" && \
+  pg_dumpall -h postgres -U postgres | gzip > $BACKUP_DIR/postgres/full_$date.sql.gz && \
+  echo \"Postgres dump done\" && \
+  tar -czf $BACKUP_DIR/gitea/gitea_$date.tar.gz -C /data/gitea . && \
+  echo \"Gitea backup done\" && \
+  tar -czf $BACKUP_DIR/registry/registry_$date.tar.gz -C /data/registry . && \
+  echo \"Registry backup done\" && \
+  find $BACKUP_DIR -type f -mtime +$RETENTION_DAYS -delete && \
+  echo \"Old backups purged\" && \
+  echo \"=== Complete ===\""
+
+[Service]
+Type=oneshot
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=default.target

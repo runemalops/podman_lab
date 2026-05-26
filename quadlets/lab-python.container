@@ -1,0 +1,20 @@
+[Unit]
+Description=Python 3.12 portable development environment
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/library/python:3.12-slim
+ContainerName=lab-python
+Network=lab-net.network
+PublishPort=8000:8000
+PublishPort=5000:5000
+Volume=%h/Projects:/workspace:Z
+Exec=sleep infinity
+
+[Service]
+Restart=always
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=default.target

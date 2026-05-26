@@ -1,0 +1,31 @@
+[Unit]
+Description=Gitea self-hosted Git service with LFS
+After=lab-net.network postgres.service redis.service
+Requires=lab-net.network postgres.service redis.service
+
+[Container]
+Image=docker.io/gitea/gitea:latest
+ContainerName=gitea
+Network=lab-net.network
+PublishPort=3000:3000
+Volume=gitea.volume:/data:Z
+Environment=USER_UID=__UID__
+Environment=USER_GID=__UID__
+Environment=GITEA__database__DB_TYPE=postgres
+Environment=GITEA__database__HOST=postgres:5432
+Environment=GITEA__database__NAME=gitea
+Environment=GITEA__database__USER=gitea
+Environment=GITEA__server__LFS_START_SERVER=true
+Environment=GITEA__session__PROVIDER=redis
+Environment=GITEA__session__PROVIDER_CONFIG=redis://redis:6379/0
+Environment=GITEA__cache__ENABLED=true
+Environment=GITEA__cache__ADAPTER=redis
+Environment=GITEA__cache__HOST=redis://redis:6379/0
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

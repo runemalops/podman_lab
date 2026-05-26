@@ -1,0 +1,24 @@
+[Unit]
+Description=Woodpecker CI server
+After=lab-net.network postgres.service redis.service gitea.service
+Requires=lab-net.network postgres.service
+
+[Container]
+Image=docker.io/woodpeckerci/woodpecker-server:latest
+ContainerName=woodpecker-server
+Network=lab-net.network
+PublishPort=8000:8000
+PublishPort=9000:9000
+Volume=__USER__/.local/share/podman-lab/woodpecker:/var/lib/woodpecker:Z
+Environment=WOODPECKER_OPEN=false
+Environment=WOODPECKER_HOST=https://ci.__DOMAIN__
+Environment=WOODPECKER_GITEA=true
+Environment=WOODPECKER_GITEA_URL=https://git.__DOMAIN__
+EnvironmentFile=%h/.local/share/podman-lab/secrets.env
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

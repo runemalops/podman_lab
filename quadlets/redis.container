@@ -1,0 +1,17 @@
+[Unit]
+Description=Redis 7 cache and job queue for podman-lab
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/redis:7-alpine
+ContainerName=redis
+Network=lab-net.network
+Volume=__USER__/.local/share/podman-lab/redis:/data:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

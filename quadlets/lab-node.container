@@ -1,0 +1,20 @@
+[Unit]
+Description=Node.js 22 portable development environment
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/library/node:22-slim
+ContainerName=lab-node
+Network=lab-net.network
+PublishPort=3000:3000
+PublishPort=5173:5173
+Volume=%h/Projects:/workspace:Z
+Exec=sleep infinity
+
+[Service]
+Restart=always
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=default.target

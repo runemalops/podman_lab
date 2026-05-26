@@ -1,0 +1,19 @@
+[Unit]
+Description=Go 1.23 portable development environment
+After=lab-net.network
+Requires=lab-net.network
+
+[Container]
+Image=docker.io/library/golang:1.23
+ContainerName=lab-go
+Network=lab-net.network
+PublishPort=8080:8080
+Volume=%h/Projects:/workspace:Z
+Exec=sleep infinity
+
+[Service]
+Restart=always
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=default.target
