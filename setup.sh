@@ -6,12 +6,33 @@ set -euo pipefail
 # ───────────────────────────────────────────────────────
 # Usage: ./setup.sh [--domain runemal.cloud]
 #
-# Replaces __USER__, __UID__, __DOMAIN__ placeholders
-# in quadlet files, generates random secrets, copies
-# everything into place, and reloads systemd.
+# Placeholders replaced in quadlet files:
+#   __USER__        → $USER
+#   __UID__         → $(id -u)
+#   __DOMAIN__      → $DOMAIN (default runemal.cloud)
+#   __POSTGRES_IP__ → $POSTGRES_IP (default 10.89.1.2)
+#   __REDIS_IP__    → $REDIS_IP    (default 10.89.1.3)
+#   __GITEA_IP__    → $GITEA_IP    (default 10.89.1.4)
+#   __WOODPECKER_IP__ → $WOODPECKER_IP (default 10.89.1.5)
+#
+# Also generates random secrets, copies everything
+# into place, and reloads systemd.
 # ───────────────────────────────────────────────────────
 
 DOMAIN="${DOMAIN:-runemal.cloud}"
+
+# ── Container IPs ──────────────────────────────────
+# podman 4.9 (CNI backend) lacks container DNS, so
+# each service gets a fixed IP and dependent containers
+# inject /etc/hosts entries via --add-host (PodmanArgs).
+# Override via env vars or --network-subnet flag:
+#   NETWORK_SUBNET=10.89.1 POSTGRES_IP=10.89.1.10 ./setup.sh
+NETWORK_SUBNET="${NETWORK_SUBNET:-10.89.1}"
+POSTGRES_IP="${POSTGRES_IP:-${NETWORK_SUBNET}.2}"
+REDIS_IP="${REDIS_IP:-${NETWORK_SUBNET}.3}"
+GITEA_IP="${GITEA_IP:-${NETWORK_SUBNET}.4}"
+WOODPECKER_IP="${WOODPECKER_IP:-${NETWORK_SUBNET}.5}"
+
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 QUADLET_SRC="$REPO_DIR/quadlets"
 SYSTEMD_SRC="$REPO_DIR/systemd"
@@ -28,6 +49,8 @@ echo "=========================================="
 echo "Domain:      $DOMAIN"
 echo "User:        $USER"
 echo "UID:         $(id -u)"
+echo "Subnet:      ${NETWORK_SUBNET}.0/24"
+echo "IPs:         postgres=$POSTGRES_IP  redis=$REDIS_IP  gitea=$GITEA_IP  woodpecker=$WOODPECKER_IP"
 echo "Repo:        $REPO_DIR"
 echo "Quadlets ->  $CONTAINERS_DIR"
 echo "Data    ->   $DATA_DIR"
@@ -125,6 +148,10 @@ for src in "$QUADLET_SRC"/*.container "$QUADLET_SRC"/*.volume "$QUADLET_SRC"/*.n
     -e "s/__USER__/$REPLACE_USER/g" \
     -e "s/__UID__/$REPLACE_UID/g" \
     -e "s/__DOMAIN__/$REPLACE_DOMAIN/g" \
+    -e "s/__POSTGRES_IP__/$POSTGRES_IP/g" \
+    -e "s/__REDIS_IP__/$REDIS_IP/g" \
+    -e "s/__GITEA_IP__/$GITEA_IP/g" \
+    -e "s/__WOODPECKER_IP__/$WOODPECKER_IP/g" \
     "$src" > "$dest"
 
   echo "  $filename -> $dest"

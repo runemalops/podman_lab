@@ -21,8 +21,9 @@ Quadlets as systemd services.
 - `__USER__` → replaced with `$USER` by `setup.sh` (non-path uses only)
 - `__UID__` → replaced with `$(id -u)` by `setup.sh`
 - `__DOMAIN__` → replaced with domain (default `runemal.cloud`)
+- `__POSTGRES_IP__`, `__REDIS_IP__`, `__GITEA_IP__`, `__WOODPECKER_IP__` → replaced with static IPs (default 10.89.1.x)
 - Host volume paths use `%h` (systemd `$HOME` specifier), NOT `__USER__`
-- NEVER hardcode usernames or UIDs in quadlet files
+- NEVER hardcode usernames, UIDs, or IPs in quadlet files — always use placeholders
 
 ### Path layout
 ```
@@ -46,7 +47,7 @@ Quadlets as systemd services.
 
 ### Quadlet patterns
 
-**Container with DB dep:**
+**Container with DB dep (static IP + `/etc/hosts` injection):**
 ```ini
 [Unit]
 Description=...
@@ -55,6 +56,8 @@ Description=...
 Image=docker.io/org/image:tag
 ContainerName=svc-name
 Network=lab-net.network
+IP=__SVC_IP__                        # static IP placeholder
+PodmanArgs=--add-host=postgres:__POSTGRES_IP__ --add-host=redis:__REDIS_IP__
 PublishPort=3000:3000
 Volume=%h/.local/share/podman-lab/svc:/data:Z
 EnvironmentFile=%h/.local/share/podman-lab/secrets.env
@@ -66,6 +69,10 @@ Restart=always
 [Install]
 WantedBy=default.target
 ```
+
+> ⚠️ podman 4.9 (CNI backend) lacks container DNS resolution. Always use
+> `IP=` for infrastructure services and `PodmanArgs=--add-host=` for
+> consumers that reference them by hostname.
 
 **Volume:**
 ```ini
@@ -109,9 +116,10 @@ Type=oneshot
 Each agent is identical except `ContainerName` and `WOODPECKER_AGENT_LABELS`:
 ```ini
 [Container]
-Image=docker.io/woodpeckerci/woodpecker-agent:latest
+Image=docker.io/woodpeckerci/woodpecker-agent:v3
 ContainerName=wp-agent-<lang>
 Network=lab-net.network
+PodmanArgs=--add-host=woodpecker-server:__WOODPECKER_IP__
 Volume=/run/user/__UID__/podman/podman.sock:/var/run/docker.sock:Z
 Environment=WOODPECKER_SERVER=woodpecker-server:9000
 Environment=WOODPECKER_MAX_WORKFLOWS=1
@@ -132,6 +140,14 @@ Available labels: `python`, `node`, `go`, `rust`, `java`.
 - Only Gitea, Woodpecker, Registry, MinIO publish ports to host
 - Postgres, Redis, agents, dev containers are lab-net only
 - Cloudflared (host network, existing) routes `*.runemal.cloud` → localhost:PORT
+- **Container DNS**: podman 4.9 (CNI backend) does not provide DNS for
+  container names. Each infrastructure service gets a **fixed IP**:
+  - `postgres` → `10.89.1.2` (`__POSTGRES_IP__`)
+  - `redis` → `10.89.1.3` (`__REDIS_IP__`)
+  - `gitea` → `10.89.1.4` (`__GITEA_IP__`)
+  - `woodpecker-server` → `10.89.1.5` (`__WOODPECKER_IP__`)
+- Containers that reference others by hostname inject `/etc/hosts` entries
+  via `PodmanArgs=--add-host=` — see the IP assignment table in README.md
 
 ### Backup strategy
 - Daily `pg_dumpall` for PostgreSQL
@@ -171,6 +187,11 @@ systemctl --user enable --now lab-backup.timer
 3. If external access needed: add `PublishPort` + Cloudflare tunnel entry
 4. If DB needed: add CREATE DATABASE to `postgres/init.d/init.sql`
 5. If CI agent: copy an existing `wp-agent-` file, change label + name
+6. **IP management**: if other containers resolve this service by hostname:
+   - Add a `__SVC_IP__` placeholder to the new container via `IP=`
+   - Register it in setup.sh with a default IP and sed substitution
+   - Add `PodmanArgs=--add-host=svc:__SVC_IP__` to every container that
+     references the new service by hostname
 
 ## Verification commands
 
