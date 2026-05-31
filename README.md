@@ -9,12 +9,12 @@ files and managed with `systemctl --user`.
 
 ```
 Internet -> Cloudflare -> Cloudflared (host network, existing tunnel)
-                               |
-       localhost:3000    localhost:8000   localhost:5000  localhost:9001
-           |                  |               |               |
-        gitea           woodpecker-server  registry        minio
-           |                  |               |               |
-           +------------------+---------------+---------------+
+                                |
+   localhost:3000  localhost:8000   localhost:9002   localhost:5000  localhost:9000/9001
+       |               |               |                  |              |
+    gitea        woodpecker-server   wp-grpc           registry       minio
+       |               |               |                  |              |
+       +---------------+---------------+------------------+--------------+
                                |
                          lab-net bridge
                 (postgres, redis, 5 wp-agents, backups,
@@ -31,12 +31,15 @@ Internet -> Cloudflare -> Cloudflared (host network, existing tunnel)
 | **Woodpecker** | CI/CD server + per-language agents | 8000 / 9002→9000† | `ci.runemal.cloud` |
 | **Registry** | Private container image storage | 5000 | `registry.runemal.cloud` |
 | **MinIO** | S3-compatible artifact & log storage | 9000/9001 | `minio.runemal.cloud` |
-| **Dev containers** | Python, Node, Go, Rust, Java envs | varied | *local only* |
+| **Dev containers** | Python, Node, Go, Rust, Java envs | 8001† / 5001†, 3001† / 5174†, 8081†, 8082†, 8083† | *local only* |
 | **Backup** | Daily pg_dump + tar with 30-day rotation | — | *timer: 03:00* |
 
 > † Woodpecker gRPC (agent communication) — internal container port 9000 is
 > mapped to host port 9002 to avoid conflict with MinIO's S3 API on port 9000.
 > Agents connect to `woodpecker-server:9000` over the internal `lab-net` bridge.
+>
+> ‡ Dev containers use shifted host ports to avoid conflicts with infrastructure
+> services — see the table below for exact mappings.
 
 ### SDLC Pipeline
 
