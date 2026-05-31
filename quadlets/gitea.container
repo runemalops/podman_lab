@@ -23,6 +23,7 @@ Environment=GITEA__session__PROVIDER_CONFIG=redis://redis:6379/0
 Environment=GITEA__cache__ENABLED=true
 Environment=GITEA__cache__ADAPTER=redis
 Environment=GITEA__cache__HOST=redis://redis:6379/0
+Environment=GITEA__security__INSTALL_LOCK=true
 EnvironmentFile=%h/.local/share/podman-lab/secrets.env
 
 [Service]

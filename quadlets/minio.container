@@ -5,6 +5,7 @@ Description=MinIO S3-compatible object storage
 Image=docker.io/minio/minio:latest
 ContainerName=minio
 Network=lab-net.network
+IP=__MINIO_IP__
 PublishPort=9000:9000
 PublishPort=9001:9001
 Volume=minio.volume:/data:Z

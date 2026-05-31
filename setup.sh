@@ -10,10 +10,12 @@ set -euo pipefail
 #   __USER__        → $USER
 #   __UID__         → $(id -u)
 #   __DOMAIN__      → $DOMAIN (default runemal.cloud)
-#   __POSTGRES_IP__ → $POSTGRES_IP (default 10.89.1.2)
-#   __REDIS_IP__    → $REDIS_IP    (default 10.89.1.3)
-#   __GITEA_IP__    → $GITEA_IP    (default 10.89.1.4)
-#   __WOODPECKER_IP__ → $WOODPECKER_IP (default 10.89.1.5)
+#   __POSTGRES_IP__    → $POSTGRES_IP    (default 10.89.1.2)
+#   __REDIS_IP__       → $REDIS_IP       (default 10.89.1.3)
+#   __GITEA_IP__       → $GITEA_IP       (default 10.89.1.4)
+#   __WOODPECKER_IP__  → $WOODPECKER_IP  (default 10.89.1.5)
+#   __MINIO_IP__       → $MINIO_IP       (default 10.89.1.6)
+#   __REGISTRY_IP__    → $REGISTRY_IP    (default 10.89.1.7)
 #
 # Also generates random secrets, copies everything
 # into place, and reloads systemd.
@@ -32,6 +34,8 @@ POSTGRES_IP="${POSTGRES_IP:-${NETWORK_SUBNET}.2}"
 REDIS_IP="${REDIS_IP:-${NETWORK_SUBNET}.3}"
 GITEA_IP="${GITEA_IP:-${NETWORK_SUBNET}.4}"
 WOODPECKER_IP="${WOODPECKER_IP:-${NETWORK_SUBNET}.5}"
+MINIO_IP="${MINIO_IP:-${NETWORK_SUBNET}.6}"
+REGISTRY_IP="${REGISTRY_IP:-${NETWORK_SUBNET}.7}"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 QUADLET_SRC="$REPO_DIR/quadlets"
@@ -50,7 +54,7 @@ echo "Domain:      $DOMAIN"
 echo "User:        $USER"
 echo "UID:         $(id -u)"
 echo "Subnet:      ${NETWORK_SUBNET}.0/24"
-echo "IPs:         postgres=$POSTGRES_IP  redis=$REDIS_IP  gitea=$GITEA_IP  woodpecker=$WOODPECKER_IP"
+echo "IPs:         postgres=$POSTGRES_IP  redis=$REDIS_IP  gitea=$GITEA_IP  woodpecker=$WOODPECKER_IP  minio=$MINIO_IP  registry=$REGISTRY_IP"
 echo "Repo:        $REPO_DIR"
 echo "Quadlets ->  $CONTAINERS_DIR"
 echo "Data    ->   $DATA_DIR"
@@ -127,9 +131,7 @@ CREATE USER woodpecker WITH PASSWORD '${WOODPECKER_DB_PASS}';
 CREATE DATABASE woodpecker OWNER woodpecker;
 SQLEOF
 
-cp "$CONFIG_SRC/postgres/init.sql" "$DATA_DIR/postgres/init.d/init.sql"
-
-echo "PostgreSQL init script written"
+echo "PostgreSQL init script written with secrets"
 
 # ── Copy & interpolate quadlet files ─────────────
 
@@ -152,6 +154,8 @@ for src in "$QUADLET_SRC"/*.container "$QUADLET_SRC"/*.volume "$QUADLET_SRC"/*.n
     -e "s/__REDIS_IP__/$REDIS_IP/g" \
     -e "s/__GITEA_IP__/$GITEA_IP/g" \
     -e "s/__WOODPECKER_IP__/$WOODPECKER_IP/g" \
+    -e "s/__MINIO_IP__/$MINIO_IP/g" \
+    -e "s/__REGISTRY_IP__/$REGISTRY_IP/g" \
     "$src" > "$dest"
 
   echo "  $filename -> $dest"

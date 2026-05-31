@@ -5,6 +5,7 @@ Description=Podman Registry v2 — local container image storage
 Image=docker.io/registry:2
 ContainerName=registry
 Network=lab-net.network
+IP=__REGISTRY_IP__
 PublishPort=5000:5000
 Volume=registry.volume:/var/lib/registry:Z
 Volume=%h/.local/share/podman-lab/registry/config.yml:/etc/docker/registry/config.yml:Z,ro

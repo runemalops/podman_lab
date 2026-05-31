@@ -3,7 +3,7 @@ Description=Daily backup job for podman-lab services
 After=postgres.service gitea.service
 
 [Container]
-Image=docker.io/postgres:16-alpine
+Image=docker.io/alpine:latest
 ContainerName=lab-backup
 Network=lab-net.network
 PodmanArgs=--add-host=postgres:__POSTGRES_IP__ --add-host=gitea:__GITEA_IP__
@@ -12,16 +12,19 @@ Volume=%h/.local/share/podman-lab/gitea:/data/gitea:Z,ro
 Volume=%h/.local/share/podman-lab/registry:/data/registry:Z,ro
 Environment=BACKUP_DIR=/backup
 Environment=RETENTION_DAYS=30
+Environment=PGHOST=postgres
+Environment=PGUSER=postgres
 EnvironmentFile=%h/.local/share/podman-lab/secrets.env
-Exec=-/bin/sh -c "\
+Exec=/bin/sh -c "\
+  apk add --no-cache postgresql-client >/dev/null 2>&1 && \
   mkdir -p $BACKUP_DIR/{postgres,gitea,registry} && \
-  date=$(date +%Y%m%d) && \
-  echo \"=== Backup $date ===\" && \
-  pg_dumpall -h postgres -U postgres | gzip > $BACKUP_DIR/postgres/full_$date.sql.gz && \
+  date=\$(date +%Y%m%d) && \
+  echo \"=== Backup \$date ===\" && \
+  pg_dumpall -h postgres -U postgres | gzip > $BACKUP_DIR/postgres/full_\$date.sql.gz && \
   echo \"Postgres dump done\" && \
-  tar -czf $BACKUP_DIR/gitea/gitea_$date.tar.gz -C /data/gitea . && \
+  tar -czf $BACKUP_DIR/gitea/gitea_\$date.tar.gz -C /data/gitea . && \
   echo \"Gitea backup done\" && \
-  tar -czf $BACKUP_DIR/registry/registry_$date.tar.gz -C /data/registry . && \
+  tar -czf $BACKUP_DIR/registry/registry_\$date.tar.gz -C /data/registry . && \
   echo \"Registry backup done\" && \
   find $BACKUP_DIR -type f -mtime +$RETENTION_DAYS -delete && \
   echo \"Old backups purged\" && \

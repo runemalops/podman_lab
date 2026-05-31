@@ -5,7 +5,7 @@ Description=Java 21 (Eclipse Temurin) portable development environment
 Image=docker.io/library/eclipse-temurin:21-jdk
 ContainerName=lab-java
 Network=lab-net.network
-PublishPort=8080:8080
+PublishPort=8082:8080
 Volume=%h/Projects:/workspace:Z
 Exec=sleep infinity
 

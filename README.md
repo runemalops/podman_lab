@@ -141,11 +141,11 @@ Available containers and pre-exposed ports:
 
 | Container | Image | Ports |
 |-----------|-------|:-----:|
-| `lab-python` | python:3.12-slim | 8000, 5000 |
-| `lab-node` | node:22-slim | 3000, 5173 |
-| `lab-go` | golang:1.23 | 8080 |
-| `lab-rust` | rust:slim | 8080 |
-| `lab-java` | eclipse-temurin:21-jdk | 8080 |
+| `lab-python` | python:3.12-slim | 8001, 5001 |
+| `lab-node` | node:22-slim | 3001, 5174 |
+| `lab-go` | golang:1.23 | 8081 |
+| `lab-rust` | rust:slim | 8083 |
+| `lab-java` | eclipse-temurin:21-jdk | 8082 |
 
 Your `~/Projects/` directory is mounted at `/workspace/` in every dev container.
 
@@ -244,6 +244,8 @@ via `PodmanArgs=--add-host`.
 | `redis` | `10.89.1.3` | `redis.container` (`IP=`) |
 | `gitea` | `10.89.1.4` | `gitea.container` (`IP=`) |
 | `woodpecker-server` | `10.89.1.5` | `woodpecker-server.container` (`IP=`) |
+| `minio` | `10.89.1.6` | `minio.container` (`IP=`) |
+| `registry` | `10.89.1.7` | `registry.container` (`IP=`) |
 
 ### Containers that inject `/etc/hosts`
 
@@ -276,6 +278,8 @@ The placeholders are:
 | `__REDIS_IP__` | `${NETWORK_SUBNET}.3` | `REDIS_IP` |
 | `__GITEA_IP__` | `${NETWORK_SUBNET}.4` | `GITEA_IP` |
 | `__WOODPECKER_IP__` | `${NETWORK_SUBNET}.5` | `WOODPECKER_IP` |
+| `__MINIO_IP__` | `${NETWORK_SUBNET}.6` | `MINIO_IP` |
+| `__REGISTRY_IP__` | `${NETWORK_SUBNET}.7` | `REGISTRY_IP` |
 
 The `NETWORK_SUBNET` variable defaults to `10.89.1` (the first three octets).
 IPs increment from `.2` to avoid the gateway at `.1`.
