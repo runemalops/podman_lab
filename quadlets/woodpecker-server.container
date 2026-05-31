@@ -8,6 +8,7 @@ Image=docker.io/woodpeckerci/woodpecker-server:v3
 ContainerName=woodpecker-server
 Network=lab-net.network
 IP=__WOODPECKER_IP__
+PodmanArgs=--add-host=postgres:__POSTGRES_IP__
 PublishPort=8000:8000
 PublishPort=9002:9000
 Volume=%h/.local/share/podman-lab/woodpecker:/var/lib/woodpecker:Z
