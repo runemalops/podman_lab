@@ -4,7 +4,7 @@ set -euo pipefail
 # ───────────────────────────────────────────────────────
 # podman-lab — Automated Deployment Script
 # ───────────────────────────────────────────────────────
-# Usage: ./setup.sh [--domain runemal.cloud] [--start|--stop]
+# Usage: ./setup.sh [--domain runemal.cloud] [--start|--stop|--status]
 #
 # Placeholders replaced in quadlet files:
 #   __USER__        → $USER
@@ -42,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       ACTION="stop"
       shift
       ;;
+    --status)
+      ACTION="status"
+      shift
+      ;;
     --domain)
       DOMAIN="$2"
       shift 2
@@ -51,7 +55,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "Usage: $0 [--domain runemal.cloud] [--start|--stop]"
+      echo "Usage: $0 [--domain runemal.cloud] [--start|--stop|--status]"
       exit 1
       ;;
   esac
@@ -82,11 +86,28 @@ stop_lab() {
   echo "All services stopped."
 }
 
+status_lab() {
+  echo "podman-lab service status"
+  echo "========================="
+  for svc in postgres redis gitea woodpecker-server \
+             wp-agent-python wp-agent-node wp-agent-go wp-agent-rust wp-agent-java \
+             registry minio lab-backup.timer; do
+    if systemctl --user is-active --quiet "$svc" 2>/dev/null; then
+      printf "  \e[32m●\e[0m %s\n" "$svc"
+    elif systemctl --user is-failed --quiet "$svc" 2>/dev/null; then
+      printf "  \e[31m●\e[0m %s (failed)\n" "$svc"
+    else
+      printf "  \e[33m○\e[0m %s (inactive)\n" "$svc"
+    fi
+  done
+}
+
 # ── Dispatch action ───────────────────────────────
 
 case "$ACTION" in
-  start) start_lab; exit 0 ;;
-  stop)  stop_lab;  exit 0 ;;
+  start)  start_lab;  exit 0 ;;
+  stop)   stop_lab;   exit 0 ;;
+  status) status_lab; exit 0 ;;
   setup) ;;  # fall through to full setup below
 esac
 
