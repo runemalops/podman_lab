@@ -5,6 +5,7 @@ Description=Node.js 22 portable development environment
 Image=docker.io/library/node:22-slim
 ContainerName=lab-node
 Network=lab-net.network
+IP=__LAB_NODE_IP__
 PublishPort=3001:3000
 PublishPort=5174:5173
 Volume=%h/Projects:/workspace:Z

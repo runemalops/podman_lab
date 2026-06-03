@@ -5,6 +5,7 @@ Description=Go 1.23 portable development environment
 Image=docker.io/library/golang:1.23
 ContainerName=lab-go
 Network=lab-net.network
+IP=__LAB_GO_IP__
 PublishPort=8081:8080
 Volume=%h/Projects:/workspace:Z
 Exec=sleep infinity

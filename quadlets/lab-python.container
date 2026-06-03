@@ -5,6 +5,7 @@ Description=Python 3.12 portable development environment
 Image=docker.io/library/python:3.12-slim
 ContainerName=lab-python
 Network=lab-net.network
+IP=__LAB_PYTHON_IP__
 PublishPort=8001:8000
 PublishPort=5001:5000
 Volume=%h/Projects:/workspace:Z

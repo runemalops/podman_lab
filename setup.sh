@@ -16,6 +16,11 @@ set -euo pipefail
 #   __WOODPECKER_IP__  → $WOODPECKER_IP  (default 10.89.1.5)
 #   __MINIO_IP__       → $MINIO_IP       (default 10.89.1.6)
 #   __REGISTRY_IP__    → $REGISTRY_IP    (default 10.89.1.7)
+#   __LAB_PYTHON_IP__  → $LAB_PYTHON_IP  (default 10.89.1.10)
+#   __LAB_NODE_IP__    → $LAB_NODE_IP    (default 10.89.1.11)
+#   __LAB_GO_IP__      → $LAB_GO_IP      (default 10.89.1.12)
+#   __LAB_JAVA_IP__    → $LAB_JAVA_IP    (default 10.89.1.13)
+#   __LAB_RUST_IP__    → $LAB_RUST_IP    (default 10.89.1.14)
 #
 # Also generates random secrets, copies everything
 # into place, and reloads systemd.
@@ -98,6 +103,11 @@ GITEA_IP="${GITEA_IP:-${NETWORK_SUBNET}.4}"
 WOODPECKER_IP="${WOODPECKER_IP:-${NETWORK_SUBNET}.5}"
 MINIO_IP="${MINIO_IP:-${NETWORK_SUBNET}.6}"
 REGISTRY_IP="${REGISTRY_IP:-${NETWORK_SUBNET}.7}"
+LAB_PYTHON_IP="${LAB_PYTHON_IP:-${NETWORK_SUBNET}.10}"
+LAB_NODE_IP="${LAB_NODE_IP:-${NETWORK_SUBNET}.11}"
+LAB_GO_IP="${LAB_GO_IP:-${NETWORK_SUBNET}.12}"
+LAB_JAVA_IP="${LAB_JAVA_IP:-${NETWORK_SUBNET}.13}"
+LAB_RUST_IP="${LAB_RUST_IP:-${NETWORK_SUBNET}.14}"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 QUADLET_SRC="$REPO_DIR/quadlets"
@@ -116,7 +126,7 @@ echo "Domain:      $DOMAIN"
 echo "User:        $USER"
 echo "UID:         $(id -u)"
 echo "Subnet:      ${NETWORK_SUBNET}.0/24"
-echo "IPs:         postgres=$POSTGRES_IP  redis=$REDIS_IP  gitea=$GITEA_IP  woodpecker=$WOODPECKER_IP  minio=$MINIO_IP  registry=$REGISTRY_IP"
+echo "IPs:         postgres=$POSTGRES_IP  redis=$REDIS_IP  gitea=$GITEA_IP  woodpecker=$WOODPECKER_IP  minio=$MINIO_IP  registry=$REGISTRY_IP  lab-python=$LAB_PYTHON_IP  lab-node=$LAB_NODE_IP  lab-go=$LAB_GO_IP  lab-java=$LAB_JAVA_IP  lab-rust=$LAB_RUST_IP"
 echo "Repo:        $REPO_DIR"
 echo "Quadlets ->  $CONTAINERS_DIR"
 echo "Data    ->   $DATA_DIR"
@@ -218,6 +228,11 @@ for src in "$QUADLET_SRC"/*.container "$QUADLET_SRC"/*.volume "$QUADLET_SRC"/*.n
     -e "s/__WOODPECKER_IP__/$WOODPECKER_IP/g" \
     -e "s/__MINIO_IP__/$MINIO_IP/g" \
     -e "s/__REGISTRY_IP__/$REGISTRY_IP/g" \
+    -e "s/__LAB_PYTHON_IP__/$LAB_PYTHON_IP/g" \
+    -e "s/__LAB_NODE_IP__/$LAB_NODE_IP/g" \
+    -e "s/__LAB_GO_IP__/$LAB_GO_IP/g" \
+    -e "s/__LAB_JAVA_IP__/$LAB_JAVA_IP/g" \
+    -e "s/__LAB_RUST_IP__/$LAB_RUST_IP/g" \
     "$src" > "$dest"
 
   echo "  $filename -> $dest"

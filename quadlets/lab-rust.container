@@ -5,6 +5,7 @@ Description=Rust portable development environment
 Image=docker.io/library/rust:slim
 ContainerName=lab-rust
 Network=lab-net.network
+IP=__LAB_RUST_IP__
 PublishPort=8083:8080
 Volume=%h/Projects:/workspace:Z
 Exec=sleep infinity
