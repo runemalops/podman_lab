@@ -65,7 +65,8 @@ DEPLOY  -> systemctl --user restart <quadlet>
 ```bash
 git clone <repo-url> podman-lab
 cd podman-lab
-./setup.sh
+./setup.sh               # deploy only
+./setup.sh --start       # deploy + start all services
 ```
 
 `setup.sh`:
@@ -81,12 +82,27 @@ cd podman-lab
 8. Runs `systemctl --user daemon-reload`
 9. Prints post-setup instructions
 
+After initial deployment, use `--start` and `--stop` to control the lab:
+
+```bash
+./setup.sh --start   # start all services in dependency order
+./setup.sh --stop    # stop all services (reverse order)
+```
+
 > **Note**: Host volume paths use `%h` (systemd home-directory specifier)
 > rather than `__USER__` — this avoids relative-path issues. The `__USER__`
 > placeholder is still used for non-path interpolation
 > (e.g., `Environment=USER_UID=__UID__`).
 
-### Start Services
+### Start / Stop Services
+
+Start everything in one command (respects dependency order):
+
+```bash
+./setup.sh --start
+```
+
+Or start individually:
 
 ```bash
 # Core infrastructure
@@ -110,6 +126,12 @@ systemctl --user enable --now registry minio
 
 # Backup timer
 systemctl --user enable --now lab-backup.timer
+```
+
+Stop everything:
+
+```bash
+./setup.sh --stop
 ```
 
 ### Post-Setup (Manual)
@@ -206,7 +228,7 @@ podman-lab/
 ├── config/
 │   ├── postgres/init.sql
 │   └── registry/config.yml
-├── setup.sh             # Automated deployment
+├── setup.sh             # Automated deployment + start/stop
 ├── RESTORE.md           # Disaster recovery
 ├── README.md            # This file
 ├── skill.md             # Machine-readable skill definition

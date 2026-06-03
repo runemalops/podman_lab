@@ -4,7 +4,7 @@ set -euo pipefail
 # ───────────────────────────────────────────────────────
 # podman-lab — Automated Deployment Script
 # ───────────────────────────────────────────────────────
-# Usage: ./setup.sh [--domain runemal.cloud]
+# Usage: ./setup.sh [--domain runemal.cloud] [--start|--stop]
 #
 # Placeholders replaced in quadlet files:
 #   __USER__        → $USER
@@ -22,6 +22,68 @@ set -euo pipefail
 # ───────────────────────────────────────────────────────
 
 DOMAIN="${DOMAIN:-runemal.cloud}"
+
+# ── CLI argument parsing ───────────────────────────
+
+ACTION="setup"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --start)
+      ACTION="start"
+      shift
+      ;;
+    --stop)
+      ACTION="stop"
+      shift
+      ;;
+    --domain)
+      DOMAIN="$2"
+      shift 2
+      ;;
+    --domain=*)
+      DOMAIN="${1#*=}"
+      shift
+      ;;
+    *)
+      echo "Usage: $0 [--domain runemal.cloud] [--start|--stop]"
+      exit 1
+      ;;
+  esac
+done
+
+# ── Start / Stop helpers ──────────────────────────
+
+start_lab() {
+  echo "Starting podman-lab services ..."
+  # Ordered by dependency graph
+  systemctl --user start postgres redis
+  systemctl --user start gitea
+  systemctl --user start woodpecker-server
+  systemctl --user start wp-agent-python wp-agent-node wp-agent-go wp-agent-rust wp-agent-java
+  systemctl --user start registry minio
+  systemctl --user enable --now lab-backup.timer 2>/dev/null || true
+  echo "All services started."
+}
+
+stop_lab() {
+  echo "Stopping podman-lab services ..."
+  # Reverse dependency order
+  systemctl --user stop lab-backup.timer 2>/dev/null || true
+  systemctl --user stop wp-agent-python wp-agent-node wp-agent-go wp-agent-rust wp-agent-java
+  systemctl --user stop woodpecker-server
+  systemctl --user stop gitea
+  systemctl --user stop registry minio redis postgres
+  echo "All services stopped."
+}
+
+# ── Dispatch action ───────────────────────────────
+
+case "$ACTION" in
+  start) start_lab; exit 0 ;;
+  stop)  stop_lab;  exit 0 ;;
+  setup) ;;  # fall through to full setup below
+esac
 
 # ── Container IPs ──────────────────────────────────
 # podman 4.9 (CNI backend) lacks container DNS, so
