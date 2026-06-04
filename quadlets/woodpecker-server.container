@@ -12,7 +12,7 @@ PodmanArgs=--add-host=postgres:__POSTGRES_IP__
 PublishPort=8000:8000
 PublishPort=9002:9000
 Volume=%h/.local/share/podman-lab/woodpecker:/var/lib/woodpecker:Z
-Environment=WOODPECKER_OPEN=false
+Environment=WOODPECKER_OPEN=true
 Environment=WOODPECKER_HOST=https://ci.__DOMAIN__
 Environment=WOODPECKER_GITEA=true
 Environment=WOODPECKER_GITEA_URL=https://git.__DOMAIN__

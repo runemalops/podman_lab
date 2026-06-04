@@ -186,6 +186,14 @@ GITEA_LFS_JWT_SECRET=$(openssl rand -hex 32)
 WOODPECKER_AGENT_SECRET=$(openssl rand -hex 32)
 MINIO_ROOT_PASSWORD=$(openssl rand -hex 16)
 
+# Preserve manually configured OAuth credentials
+EXISTING_WC_CLIENT=""
+EXISTING_WC_SECRET=""
+if [ -f "$SECRETS_FILE" ]; then
+  EXISTING_WC_CLIENT=$(grep '^WOODPECKER_GITEA_CLIENT=' "$SECRETS_FILE" | cut -d= -f2-)
+  EXISTING_WC_SECRET=$(grep '^WOODPECKER_GITEA_SECRET=' "$SECRETS_FILE" | cut -d= -f2-)
+fi
+
 cat > "$SECRETS_FILE" <<SECEOF
 # podman-lab secrets — generated $(date)
 # This file is sourced by quadlet containers via EnvironmentFile.
@@ -201,8 +209,8 @@ GITEA__server__INTERNAL_TOKEN=$GITEA_INTERNAL_TOKEN
 GITEA__server__LFS_JWT_SECRET=$GITEA_LFS_JWT_SECRET
 
 # --- Woodpecker ---
-WOODPECKER_GITEA_CLIENT=
-WOODPECKER_GITEA_SECRET=
+WOODPECKER_GITEA_CLIENT=${EXISTING_WC_CLIENT}
+WOODPECKER_GITEA_SECRET=${EXISTING_WC_SECRET}
 WOODPECKER_AGENT_SECRET=$WOODPECKER_AGENT_SECRET
 WOODPECKER_DATABASE_DRIVER=postgres
 WOODPECKER_DATABASE_DATASOURCE=postgres://woodpecker:${WOODPECKER_DB_PASS}@postgres:5432/woodpecker?sslmode=disable
@@ -225,6 +233,33 @@ CREATE DATABASE woodpecker OWNER woodpecker;
 SQLEOF
 
 echo "PostgreSQL init script written with secrets"
+
+# ── Sync PostgreSQL passwords with secrets ───────
+# init.sql only runs on first init; if postgres is
+# already running, update passwords to match the
+# freshly generated secrets.
+
+if systemctl --user is-active --quiet postgres 2>/dev/null; then
+  echo "Syncing PostgreSQL user passwords with new secrets ..."
+  podman exec -i postgres psql -U postgres <<SYNCEOF
+ALTER USER gitea WITH PASSWORD '${GITEA_DB_PASS}';
+ALTER USER woodpecker WITH PASSWORD '${WOODPECKER_DB_PASS}';
+SYNCEOF
+  echo "PostgreSQL passwords updated"
+  echo "Restarting services to pick up new secrets ..."
+  systemctl --user restart gitea woodpecker-server 2>/dev/null || true
+elif [ -d "$DATA_DIR/postgres" ] && [ "$(ls -A "$DATA_DIR/postgres" 2>/dev/null)" ]; then
+  echo "Starting PostgreSQL temporarily to sync passwords ..."
+  systemctl --user start postgres
+  sleep 3
+  podman exec -i postgres psql -U postgres <<SYNCEOF
+ALTER USER gitea WITH PASSWORD '${GITEA_DB_PASS}';
+ALTER USER woodpecker WITH PASSWORD '${WOODPECKER_DB_PASS}';
+SYNCEOF
+  echo "PostgreSQL passwords updated"
+else
+  echo "Fresh install — passwords will be set by init.sql on first start"
+fi
 
 # ── Copy & interpolate quadlet files ─────────────
 

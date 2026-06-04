@@ -73,14 +73,16 @@ cd podman-lab
 1. Checks prerequisites and enables linger
 2. Creates `~/.local/share/podman-lab/` directory tree
 3. Generates random secrets → `secrets.env` (chmod 600)
-4. Generates PostgreSQL init script with matching passwords
-5. Interpolates placeholders in quadlet files:
+4. Preserves existing OAuth credentials (`WOODPECKER_GITEA_CLIENT`, `WOODPECKER_GITEA_SECRET`) across re-runs
+5. Generates PostgreSQL init script with matching passwords
+6. **Syncs PostgreSQL passwords** with newly generated secrets (restarts Gitea + Woodpecker to pick up changes)
+7. Interpolates placeholders in quadlet files:
    - `__USER__`, `__UID__`, `__DOMAIN__` — identity/domain
    - `__POSTGRES_IP__`, `__REDIS_IP__`, `__GITEA_IP__`, `__WOODPECKER_IP__` — static IPs
-6. Copies quadlets → `~/.config/containers/systemd/`
-7. Copies systemd timer → `~/.config/systemd/user/`
-8. Runs `systemctl --user daemon-reload`
-9. Prints post-setup instructions
+8. Copies quadlets → `~/.config/containers/systemd/`
+9. Copies systemd timer → `~/.config/systemd/user/`
+10. Runs `systemctl --user daemon-reload`
+11. Prints post-setup instructions
 
 After initial deployment, use `--start` and `--stop` to control the lab:
 
@@ -151,6 +153,15 @@ Stop everything:
    - `ci.runemal.cloud` → `localhost:8000`
    - `registry.runemal.cloud` → `localhost:5000`
    - `minio.runemal.cloud` → `localhost:9001`
+6. Start cloudflared tunnel:
+   ```bash
+   systemctl --user start cloudflared
+   ```
+7. Create language repos with CI pipelines:
+   ```bash
+   ./create-repos.sh --token <GITEA_API_TOKEN>
+   ```
+8. Enable Woodpecker CI for each repo via Gitea settings
 
 ## Using Dev Containers
 
@@ -173,6 +184,37 @@ Available containers and pre-exposed ports:
 | `lab-java` | eclipse-temurin:21-jdk | 8082 |
 
 Your `~/Projects/` directory is mounted at `/workspace/` in every dev container.
+
+## Creating Language Repos
+
+`create-repos.sh` creates a Git repo for each supported language on your
+Gitea instance, with boilerplate source files and a Woodpecker CI pipeline.
+
+```bash
+./create-repos.sh                                              # interactive
+./create-repos.sh --token <TOKEN>                              # non-interactive
+./create-repos.sh --token <TOKEN> --git-url https://git.runemal.cloud  # custom URL
+```
+
+Options:
+- `--token TOKEN` — Gitea API token (required)
+- `--gitea-url URL` — Gitea API base URL (default: `http://localhost:3000`)
+- `--git-url URL` — Public Git URL for display & push (default: `https://git.runemal.cloud`)
+
+Requires a Gitea API token — create one at:
+`https://git.runemal.cloud/-/user/settings/applications`
+
+Repos are created in `~/Projects/`:
+
+| Repo | Language | CI Pipeline |
+|------|----------|-------------|
+| `lab-python` | Python 3.12 | pytest + build |
+| `lab-node` | Node.js 22 | npm test + pack |
+| `lab-go` | Go 1.23 | go test + build |
+| `lab-rust` | Rust | cargo test + build |
+| `lab-java` | Java 21 | javac + jar |
+
+After creating, enable Woodpecker CI for each repo via the Gitea settings page.
 
 ## Writing CI Pipelines
 
@@ -229,6 +271,7 @@ podman-lab/
 │   ├── postgres/init.sql
 │   └── registry/config.yml
 ├── setup.sh             # Automated deployment + start/stop
+├── create-repos.sh      # Create Gitea repos with boilerplate + CI
 ├── RESTORE.md           # Disaster recovery
 ├── README.md            # This file
 ├── skill.md             # Machine-readable skill definition
@@ -332,3 +375,38 @@ Then restart the service.
 | `requested IP address not available` | Stale CNI lease — clear it (see **Stale CNI leases** above) |
 | Volume permission denied | Add `:Z` to volume mounts (SELinux context) |
 | Podman socket error | Ensure `/run/user/$UID/podman/podman.sock` exists |
+| Woodpecker `password authentication failed` | `setup.sh` regenerates secrets; password sync handles this automatically. If it fails: `podman exec postgres psql -U postgres -c "ALTER USER woodpecker WITH PASSWORD '<new>';"` |
+| Woodpecker `Client ID not registered` | OAuth credentials were overwritten by `setup.sh`. Re-paste into `secrets.env` and restart (setup.sh now preserves existing values) |
+| Woodpecker `registration is closed` | Set `WOODPECKER_OPEN=true` in `woodpecker-server.container` and restart |
+| Cloudflared not routing | Check `systemctl --user status cloudflared`; restart with `systemctl --user start cloudflared` |
+| Service won't start after `podman system reset` | Run `./setup.sh` to recreate network/volumes, then `./setup.sh --start` |
+
+### Full Deployment Workflow
+
+```bash
+# 1. Clone and deploy
+git clone <repo-url> podman-lab && cd podman-lab
+./setup.sh                          # deploy configs + sync secrets
+
+# 2. Start services
+./setup.sh --start                  # starts all in dependency order
+
+# 3. Start cloudflared tunnel
+systemctl --user start cloudflared
+
+# 4. Verify external access
+curl -s -o /dev/null -w "%{http_code}" https://git.runemal.cloud
+curl -s -o /dev/null -w "%{http_code}" https://ci.runemal.cloud
+
+# 5. Create Gitea admin + OAuth2 app (manual)
+#    Visit https://git.runemal.cloud, create user, add OAuth2 app
+
+# 6. Update secrets.env with OAuth credentials
+#    Edit ~/.local/share/podman-lab/secrets.env
+#    systemctl --user restart woodpecker-server
+
+# 7. Create language repos with CI
+./create-repos.sh --token <TOKEN>
+
+# 8. Enable Woodpecker for each repo in Gitea settings
+```
