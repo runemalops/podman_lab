@@ -130,6 +130,11 @@ LAB_GO_IP="${LAB_GO_IP:-${NETWORK_SUBNET}.12}"
 LAB_JAVA_IP="${LAB_JAVA_IP:-${NETWORK_SUBNET}.13}"
 LAB_RUST_IP="${LAB_RUST_IP:-${NETWORK_SUBNET}.14}"
 
+# MinIO credentials — override via env vars:
+#   MINIO_ACCESS_KEY=myuser MINIO_SECRET_KEY=mysecret ./setup.sh
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}"
+
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 QUADLET_SRC="$REPO_DIR/quadlets"
 SYSTEMD_SRC="$REPO_DIR/systemd"
@@ -175,29 +180,53 @@ mkdir -p "$USER_SYSTEMD_DIR"
 
 # ── Generate secrets ─────────────────────────────
 
-echo "Generating random secrets ..."
+# Helper: extract a key from secrets.env (returns "" if missing)
+_get_secret() {
+  local key="$1" file="$2"
+  grep "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- || true
+}
 
-POSTGRES_PASSWORD=$(openssl rand -hex 32)
-GITEA_DB_PASS=$(openssl rand -hex 32)
-WOODPECKER_DB_PASS=$(openssl rand -hex 32)
-GITEA_SECRET_KEY=$(openssl rand -hex 32)
-GITEA_INTERNAL_TOKEN=$(openssl rand -hex 32)
-GITEA_LFS_JWT_SECRET=$(openssl rand -hex 32)
-WOODPECKER_AGENT_SECRET=$(openssl rand -hex 32)
-MINIO_ROOT_PASSWORD=$(openssl rand -hex 16)
-
-# Preserve manually configured OAuth credentials
-EXISTING_WC_CLIENT=""
-EXISTING_WC_SECRET=""
+# Load existing secrets if present, so re-running setup.sh
+# preserves the password ↔ database relationship.
 if [ -f "$SECRETS_FILE" ]; then
-  EXISTING_WC_CLIENT=$(grep '^WOODPECKER_GITEA_CLIENT=' "$SECRETS_FILE" | cut -d= -f2-)
-  EXISTING_WC_SECRET=$(grep '^WOODPECKER_GITEA_SECRET=' "$SECRETS_FILE" | cut -d= -f2-)
+  echo "Existing secrets found — preserving them ..."
+  _old=1
+else
+  echo "No existing secrets — generating new ones ..."
+  _old=0
 fi
+
+POSTGRES_PASSWORD=$(_get_secret POSTGRES_PASSWORD "$SECRETS_FILE")
+GITEA_DB_PASS=$(_get_secret GITEA__database__PASSWD "$SECRETS_FILE")
+WOODPECKER_DB_PASS=$(_get_secret WOODPECKER_DATABASE_DATASOURCE "$SECRETS_FILE" | sed -n 's|.*:\([^@]*\)@postgres:.*|\1|p')
+GITEA_SECRET_KEY=$(_get_secret GITEA__server__SECRET_KEY "$SECRETS_FILE")
+GITEA_INTERNAL_TOKEN=$(_get_secret GITEA__server__INTERNAL_TOKEN "$SECRETS_FILE")
+GITEA_LFS_JWT_SECRET=$(_get_secret GITEA__server__LFS_JWT_SECRET "$SECRETS_FILE")
+WOODPECKER_AGENT_SECRET=$(_get_secret WOODPECKER_AGENT_SECRET "$SECRETS_FILE")
+WOODPECKER_GITEA_CLIENT=$(_get_secret WOODPECKER_GITEA_CLIENT "$SECRETS_FILE")
+WOODPECKER_GITEA_SECRET=$(_get_secret WOODPECKER_GITEA_SECRET "$SECRETS_FILE")
+MINIO_ROOT_PASSWORD=$(_get_secret MINIO_ROOT_PASSWORD "$SECRETS_FILE")
+MINIO_ACCESS_KEY=$(_get_secret MINIO_ACCESS_KEY "$SECRETS_FILE")
+MINIO_SECRET_KEY=$(_get_secret MINIO_SECRET_KEY "$SECRETS_FILE")
+
+# Generate only for truly missing values
+[ -n "$POSTGRES_PASSWORD" ]        || POSTGRES_PASSWORD=$(openssl rand -hex 32)
+[ -n "$GITEA_DB_PASS" ]            || GITEA_DB_PASS=$(openssl rand -hex 32)
+[ -n "$WOODPECKER_DB_PASS" ]       || WOODPECKER_DB_PASS=$(openssl rand -hex 32)
+[ -n "$GITEA_SECRET_KEY" ]         || GITEA_SECRET_KEY=$(openssl rand -hex 32)
+[ -n "$GITEA_INTERNAL_TOKEN" ]     || GITEA_INTERNAL_TOKEN=$(openssl rand -hex 32)
+[ -n "$GITEA_LFS_JWT_SECRET" ]     || GITEA_LFS_JWT_SECRET=$(openssl rand -hex 32)
+[ -n "$WOODPECKER_AGENT_SECRET" ]  || WOODPECKER_AGENT_SECRET=$(openssl rand -hex 32)
+[ -n "$MINIO_ROOT_PASSWORD" ]      || MINIO_ROOT_PASSWORD=$(openssl rand -hex 16)
+[ -n "$MINIO_ACCESS_KEY" ]         || MINIO_ACCESS_KEY=minioadmin
+[ -n "$MINIO_SECRET_KEY" ]         || MINIO_SECRET_KEY=$(openssl rand -hex 16)
 
 cat > "$SECRETS_FILE" <<SECEOF
 # podman-lab secrets — generated $(date)
 # This file is sourced by quadlet containers via EnvironmentFile.
 # Protect it: chmod 600
+# NOTE: These secrets are preserved across setup.sh re-runs.
+#       To force regeneration, delete this file first.
 
 # --- PostgreSQL ---
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
@@ -209,18 +238,38 @@ GITEA__server__INTERNAL_TOKEN=$GITEA_INTERNAL_TOKEN
 GITEA__server__LFS_JWT_SECRET=$GITEA_LFS_JWT_SECRET
 
 # --- Woodpecker ---
-WOODPECKER_GITEA_CLIENT=${EXISTING_WC_CLIENT}
-WOODPECKER_GITEA_SECRET=${EXISTING_WC_SECRET}
+WOODPECKER_GITEA_CLIENT=$WOODPECKER_GITEA_CLIENT
+WOODPECKER_GITEA_SECRET=$WOODPECKER_GITEA_SECRET
 WOODPECKER_AGENT_SECRET=$WOODPECKER_AGENT_SECRET
 WOODPECKER_DATABASE_DRIVER=postgres
 WOODPECKER_DATABASE_DATASOURCE=postgres://woodpecker:${WOODPECKER_DB_PASS}@postgres:5432/woodpecker?sslmode=disable
 
 # --- MinIO ---
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
+MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY
+MINIO_SECRET_KEY=$MINIO_SECRET_KEY
 SECEOF
 
 chmod 600 "$SECRETS_FILE"
 echo "Secrets written to $SECRETS_FILE"
+
+# ── Generate Woodpecker pipeline env file ─────────
+# This file is mounted into the woodpecker-server container
+# and injected into pipeline steps via WOODPECKER_ENV_FILE.
+# Only non-sensitive pipeline config goes here.
+
+PIPELINE_ENV="$DATA_DIR/woodpecker-pipeline.env"
+cat > "$PIPELINE_ENV" <<PIPEEOF
+# Woodpecker pipeline environment — generated $(date)
+# Injected into all pipeline steps by woodpecker-server.
+WOODPECKER_MINIO_ENDPOINT=http://${MINIO_IP}:9000
+WOODPECKER_MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+WOODPECKER_MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+WOODPECKER_REGISTRY=http://${REGISTRY_IP}:5000
+PIPEEOF
+
+chmod 600 "$PIPELINE_ENV"
+echo "Pipeline env written to $PIPELINE_ENV"
 
 # ── Generate init.sql for PostgreSQL ──────────────
 
@@ -236,29 +285,34 @@ echo "PostgreSQL init script written with secrets"
 
 # ── Sync PostgreSQL passwords with secrets ───────
 # init.sql only runs on first init; if postgres is
-# already running, update passwords to match the
-# freshly generated secrets.
+# already running and secrets were regenerated (e.g.
+# file was deleted), update passwords to match.
 
-if systemctl --user is-active --quiet postgres 2>/dev/null; then
-  echo "Syncing PostgreSQL user passwords with new secrets ..."
-  podman exec -i postgres psql -U postgres <<SYNCEOF
+if [ "$_old" -eq 0 ]; then
+  # Fresh secrets — make sure PostgreSQL matches
+  if systemctl --user is-active --quiet postgres 2>/dev/null; then
+    echo "Syncing PostgreSQL user passwords with new secrets ..."
+    podman exec -i postgres psql -U postgres <<SYNCEOF
 ALTER USER gitea WITH PASSWORD '${GITEA_DB_PASS}';
 ALTER USER woodpecker WITH PASSWORD '${WOODPECKER_DB_PASS}';
 SYNCEOF
-  echo "PostgreSQL passwords updated"
-  echo "Restarting services to pick up new secrets ..."
-  systemctl --user restart gitea woodpecker-server 2>/dev/null || true
-elif [ -d "$DATA_DIR/postgres" ] && [ "$(ls -A "$DATA_DIR/postgres" 2>/dev/null)" ]; then
-  echo "Starting PostgreSQL temporarily to sync passwords ..."
-  systemctl --user start postgres
-  sleep 3
-  podman exec -i postgres psql -U postgres <<SYNCEOF
+    echo "PostgreSQL passwords updated"
+    echo "Restarting services to pick up new secrets ..."
+    systemctl --user restart gitea woodpecker-server 2>/dev/null || true
+  elif [ -d "$DATA_DIR/postgres" ] && [ "$(ls -A "$DATA_DIR/postgres" 2>/dev/null)" ]; then
+    echo "Starting PostgreSQL temporarily to sync passwords ..."
+    systemctl --user start postgres
+    sleep 3
+    podman exec -i postgres psql -U postgres <<SYNCEOF
 ALTER USER gitea WITH PASSWORD '${GITEA_DB_PASS}';
 ALTER USER woodpecker WITH PASSWORD '${WOODPECKER_DB_PASS}';
 SYNCEOF
-  echo "PostgreSQL passwords updated"
+    echo "PostgreSQL passwords updated"
+  else
+    echo "Fresh install — passwords will be set by init.sql on first start"
+  fi
 else
-  echo "Fresh install — passwords will be set by init.sql on first start"
+  echo "Existing secrets preserved — no password sync needed"
 fi
 
 # ── Copy & interpolate quadlet files ─────────────

@@ -72,17 +72,36 @@ cd podman-lab
 `setup.sh`:
 1. Checks prerequisites and enables linger
 2. Creates `~/.local/share/podman-lab/` directory tree
-3. Generates random secrets → `secrets.env` (chmod 600)
-4. Preserves existing OAuth credentials (`WOODPECKER_GITEA_CLIENT`, `WOODPECKER_GITEA_SECRET`) across re-runs
+3. **Preserves all existing secrets** from `secrets.env` across re-runs
+   (passwords, tokens, OAuth credentials — everything stays the same)
+4. Generates new secrets only on first run (no existing `secrets.env`)
 5. Generates PostgreSQL init script with matching passwords
-6. **Syncs PostgreSQL passwords** with newly generated secrets (restarts Gitea + Woodpecker to pick up changes)
-7. Interpolates placeholders in quadlet files:
+6. Generates `woodpecker-pipeline.env` — injected into CI pipeline steps
+   (MinIO credentials, registry URL — separate from main secrets for security)
+7. On fresh installs only: syncs PostgreSQL passwords and restarts Gitea + Woodpecker
+8. Interpolates placeholders in quadlet files:
    - `__USER__`, `__UID__`, `__DOMAIN__` — identity/domain
    - `__POSTGRES_IP__`, `__REDIS_IP__`, `__GITEA_IP__`, `__WOODPECKER_IP__` — static IPs
-8. Copies quadlets → `~/.config/containers/systemd/`
-9. Copies systemd timer → `~/.config/systemd/user/`
-10. Runs `systemctl --user daemon-reload`
-11. Prints post-setup instructions
+9. Copies quadlets → `~/.config/containers/systemd/`
+10. Copies systemd timer → `~/.config/systemd/user/`
+11. Runs `systemctl --user daemon-reload`
+12. Prints post-setup instructions
+
+> **Force regeneration**: Delete `~/.local/share/podman-lab/secrets.env` before
+> running `setup.sh` to generate all-new secrets. You'll need to re-create the
+> Gitea admin account and re-paste OAuth credentials.
+
+### MinIO Credentials
+
+MinIO access key and secret key are managed by `setup.sh` and stored in
+`secrets.env`. They're also written to `woodpecker-pipeline.env` which is
+mounted into the Woodpecker server and injected into CI pipeline steps.
+
+Override via env vars before running `setup.sh`:
+
+```bash
+MINIO_ACCESS_KEY=myuser MINIO_SECRET_KEY=mysecret ./setup.sh
+```
 
 After initial deployment, use `--start` and `--stop` to control the lab:
 
@@ -375,8 +394,8 @@ Then restart the service.
 | `requested IP address not available` | Stale CNI lease — clear it (see **Stale CNI leases** above) |
 | Volume permission denied | Add `:Z` to volume mounts (SELinux context) |
 | Podman socket error | Ensure `/run/user/$UID/podman/podman.sock` exists |
-| Woodpecker `password authentication failed` | `setup.sh` regenerates secrets; password sync handles this automatically. If it fails: `podman exec postgres psql -U postgres -c "ALTER USER woodpecker WITH PASSWORD '<new>';"` |
-| Woodpecker `Client ID not registered` | OAuth credentials were overwritten by `setup.sh`. Re-paste into `secrets.env` and restart (setup.sh now preserves existing values) |
+| Woodpecker `password authentication failed` | Secrets are preserved across re-runs; this shouldn't happen. If it does: `podman exec postgres psql -U postgres -c "ALTER USER woodpecker WITH PASSWORD '<new>';"` then update `secrets.env` and restart |
+| Woodpecker `Client ID not registered` | OAuth credentials are preserved across re-runs. If missing, re-paste into `secrets.env` and restart woodpecker-server |
 | Woodpecker `registration is closed` | Set `WOODPECKER_OPEN=true` in `woodpecker-server.container` and restart |
 | Cloudflared not routing | Check `systemctl --user status cloudflared`; restart with `systemctl --user start cloudflared` |
 | Service won't start after `podman system reset` | Run `./setup.sh` to recreate network/volumes, then `./setup.sh --start` |

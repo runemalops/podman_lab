@@ -17,6 +17,8 @@ Environment=GITEA__database__DB_TYPE=postgres
 Environment=GITEA__database__HOST=postgres:5432
 Environment=GITEA__database__NAME=gitea
 Environment=GITEA__database__USER=gitea
+Environment=GITEA__server__ROOT_URL=http://__GITEA_IP__:3000/
+Environment=GITEA__server__DOMAIN=__GITEA_IP__
 Environment=GITEA__server__LFS_START_SERVER=true
 Environment=GITEA__session__PROVIDER=redis
 Environment=GITEA__session__PROVIDER_CONFIG=redis://redis:6379/0
