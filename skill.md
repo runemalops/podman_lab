@@ -101,8 +101,18 @@ This lab runs entirely on **podman**. Follow these conventions:
 - Mounted read-only into the `woodpecker-server` container
 - Separate from `secrets.env` to avoid exposing database passwords to pipelines
 - MinIO credentials can be overridden: `MINIO_ACCESS_KEY=x MINIO_SECRET_KEY=y ./setup.sh`
-- Endpoint URLs (registry, MinIO) are hardcoded in `.woodpecker.yml` files since
+- Endpoint URLs (registry, MinIO) are hardcoded in `.woodpecker/` files since
   they're infrastructure config, not secrets
+
+### CI Pipeline environment injection
+- `WOODPECKER_ENVIRONMENT` on the woodpecker-server injects env vars into
+  ALL pipeline steps (e.g., `GITEA_TOKEN`, `GITEA_URL`)
+- **Important**: Use `$VAR` (no braces) for custom env vars in commands.
+  Woodpecker pre-processor expands `${VAR}` at YAML parse time and replaces
+  unknown variables with empty strings. `$VAR` avoids this.
+- `CI_NETRC_USERNAME`, `CI_NETRC_PASSWORD`, `CI_NETRC_MACHINE` are only
+  available in Woodpecker's own images — NOT in arbitrary images like alpine.
+  Use Gitea API instead for operations that need auth.
 
 ### PostgreSQL password sync
 On **fresh installs** (no `secrets.env`), `setup.sh` generates new secrets and
@@ -207,6 +217,22 @@ Environment=WOODPECKER_AGENT_LABELS=type=<lang>
 EnvironmentFile=%h/.local/share/podman-lab/secrets.env
 ```
 
+### Woodpecker server env injection
+The woodpecker-server container uses `WOODPECKER_ENVIRONMENT` to inject
+custom env vars into all pipeline steps:
+
+```ini
+[Container]
+Environment=WOODPECKER_ENVIRONMENT=GITEA_TOKEN:<token>,GITEA_URL:http://10.89.1.4:3000
+```
+
+This is required because:
+- `CI_NETRC_USERNAME`/`CI_NETRC_PASSWORD` only work in Woodpecker's own images
+- Custom env vars from `WOODPECKER_ENV_FILE` are injected into the server
+  process, not into pipeline steps
+- `WOODPECKER_ENVIRONMENT` is the official way to inject env vars into
+  all pipeline steps
+
 Available labels: `python`, `node`, `go`, `rust`, `java`.
 
 ### Gitea + PostgreSQL config
@@ -251,7 +277,7 @@ podman system reset --force
 
 ### Language repos with CI
 `create-repos.sh` creates Git repos on Gitea with boilerplate source files
-and `.woodpecker.yml` CI pipelines:
+and `.woodpecker/` CI pipelines:
 
 ```bash
 ./create-repos.sh --token <TOKEN>                              # uses git.runemal.cloud
@@ -259,7 +285,31 @@ and `.woodpecker.yml` CI pipelines:
 ```
 
 Creates 5 repos: `lab-python`, `lab-node`, `lab-go`, `lab-rust`, `lab-java`.
-Each has source files, tests, and a CI pipeline targeting the matching agent.
+Each has source files, tests, and a gitflow CI pipeline structure.
+
+### CI Pipeline structure (gitflow model)
+Each repo has four workflow files in `.woodpecker/`:
+
+| File | Trigger | Purpose |
+|------|---------|---------|
+| `test.yaml` | All branches | Run tests |
+| `build-develop.yaml` | `develop` branch | Build + push container with `develop` tag |
+| `build-release.yaml` | `master`/`main` branch | Build + create version tag + push container |
+| `build-tag.yaml` | Tag push `v*` | Build + push container with version tag |
+
+**Versioning**: Semantic versioning via Gitea API. The `create-tag` step
+queries the latest tag, increments the patch number, and creates a new tag
+via `POST /api/v1/repos/{owner}/{repo}/tags`. This triggers the
+`build-tag.yaml` workflow which builds and pushes a version-tagged container.
+
+**Key patterns**:
+- Tag creation uses Gitea API (not `git push`) because `CI_NETRC_*` env vars
+  only work in Woodpecker's own images, not in arbitrary images like alpine
+- Use `$VAR` (no braces) for env vars in commands to avoid Woodpecker
+  pre-processor expansion issues
+- `WOODPECKER_ENVIRONMENT` on the server injects `GITEA_TOKEN` and `GITEA_URL`
+  into all pipeline steps
+- `lab-python` uses `main` as default branch; all others use `master`
 
 ### Container image builds
 Use the [Woodpecker Podman plugin](https://woodpecker-ci.org/plugins/podman)
@@ -270,7 +320,7 @@ to build and push OCI images from `Containerfile`:
     image: head1328/woodpecker-ci-plugin-podman
     privileged: true
     settings:
-      repo: 10.89.1.7:5000/my-app
+      repo: lab-python
       tags:
         - "${CI_COMMIT_SHA:0:8}"
         - latest
@@ -285,6 +335,16 @@ to build and push OCI images from `Containerfile`:
 - `registry` field has no `http://` prefix
 - Tags support shell expansion: `"${CI_COMMIT_SHA:0:8}"`
 
+**Container image tags** pushed to `10.89.1.7:5000`:
+
+| Tag | Example | When |
+|-----|---------|------|
+| `<version>` | `0.0.1` | On release (auto-incremented patch) |
+| `latest` | `latest` | On master/main push |
+| `<sha>` | `e38bb860` | On every push |
+| `develop` | `develop` | On develop branch push |
+| `develop-<sha>` | `develop-e38bb860` | On develop push |
+
 ### Backup strategy
 - Daily `pg_dumpall` for PostgreSQL
 - Daily `tar -czf` for Gitea data and Registry blobs
@@ -297,10 +357,11 @@ to build and push OCI images from `Containerfile`:
 |-------|-------|
 | Plan | Gitea Issues, Wiki |
 | Code | Gitea repos, Dev containers (podman exec) |
-| Build | Woodpecker agents (push webhook from Gitea) |
-| Test | Ephemeral containers spawned by agent (podman socket) |
-| Package | Registry (container images), MinIO (artifacts) |
+| Build | Woodpecker agents (push webhook from Gitea) — gitflow model |
+| Test | Ephemeral containers spawned by agent (all branches) |
+| Package | Registry (versioned container images), MinIO (artifacts) |
 | Deploy | systemctl --user restart <quadlet> |
+| Version | Semantic versioning via Gitea API (auto-increment patch) |
 | Backup | lab-backup container + systemd timer |
 
 ## Adding a new service

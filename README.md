@@ -46,10 +46,11 @@ Internet -> Cloudflare -> Cloudflared (host network, existing tunnel)
 ```
 PLAN    -> Gitea Issues/Wiki
 CODE    -> Gitea repos + dev containers (podman exec)
-BUILD   -> Woodpecker agent picks up push webhook
-TEST    -> Agent runs steps in ephemeral containers
-PACKAGE -> Image -> Registry | Artifacts -> MinIO
+BUILD   -> Woodpecker agent picks up push webhook (gitflow model)
+TEST    -> Agent runs tests in ephemeral containers (all branches)
+PACKAGE -> Image -> Registry (versioned tags) | Artifacts -> MinIO
 DEPLOY  -> systemctl --user restart <quadlet>
+VERSION -> Semantic versioning via Gitea API (auto-increment patch)
 ```
 
 ## Quick Start
@@ -237,29 +238,97 @@ After creating, enable Woodpecker CI for each repo via the Gitea settings page.
 
 ## Writing CI Pipelines
 
-Create `.woodpecker.yml` in your repository root. Target a specific agent
-via labels:
+Each repo uses a **gitflow** model with four workflow files in `.woodpecker/`:
+
+```
+.woodpecker/
+├── test.yaml              # All branches — run tests
+├── build-develop.yaml     # develop branch — build + push container (develop tag)
+├── build-release.yaml     # master/main branch — build + create version tag + push container
+└── build-tag.yaml         # Tag push (v*) — build + push container with version tag
+```
+
+### Workflow triggers
+
+| Event | Workflow | What happens |
+|-------|----------|--------------|
+| Push to any branch | `test.yaml` | Run tests |
+| Push to `develop` | `build-develop.yaml` | Build + push container with `develop` tag |
+| Push to `master`/`main` | `build-release.yaml` | Build + auto-create version tag (Gitea API) + push container with SHA + `latest` tags + upload artifacts to MinIO |
+| Tag push `v*` | `build-tag.yaml` | Build + push container with version tag + upload artifacts |
+
+### Versioning
+
+Releases use **semantic versioning** (patch auto-increment):
+
+1. `build-release.yaml` queries the Gitea API for the latest tag
+2. Increments the patch number (e.g., `v0.0.1` → `v0.0.2`)
+3. Creates the tag via Gitea API (triggers `build-tag.yaml`)
+4. Container images are tagged with the version number
+
+### Example: master push workflow
 
 ```yaml
-# .woodpecker.yml
-labels:
-  type: python
+# .woodpecker/build-release.yaml
+when:
+  branch: master      # or 'main' for lab-python
 
 steps:
-  - name: test
-    image: python:3.12-slim
-    commands:
-      - pip install -r requirements.txt
-      - pytest
-
   - name: build
     image: python:3.12-slim
     commands:
-      - pip install build
-      - python -m build
+      - pip install build && python -m build
+
+  - name: create-tag
+    image: docker.io/library/alpine:latest
+    commands:
+      - apk add --no-cache curl jq
+      - |
+        LAST_VERSION=$(curl -s -H "Authorization: token $GITEA_TOKEN" \
+          "$GITEA_URL/api/v1/repos/$CI_REPO/tags?limit=1&page=1" \
+          | jq -r '.[0].name // empty' | sed 's/^v//')
+        # ... calculate next version ...
+        curl -s -X POST -H "Authorization: token $GITEA_TOKEN" \
+          -d "{\"tag_name\":\"v$VERSION\",\"target\":\"$CI_COMMIT_BRANCH\"}" \
+          "$GITEA_URL/api/v1/repos/$CI_REPO/tags"
+
+  - name: container-build
+    image: head1328/woodpecker-ci-plugin-podman
+    privileged: true
+    settings:
+      repo: lab-python
+      tags:
+        - "${CI_COMMIT_SHA:0:8}"
+        - latest
+      registry: 10.89.1.7:5000
+      tls_verify: false
+      containerfile: Containerfile
+
+  - name: upload-artifacts
+    image: minio/mc:latest
+    commands:
+      - VERSION=$(cat .woodpecker-version)
+      - mc alias set lab http://10.89.1.6:9000 \
+          $WOODPECKER_MINIO_ACCESS_KEY $WOODPECKER_MINIO_SECRET_KEY
+      - mc cp --recursive dist/ lab/artifacts/lab-python/$VERSION/
 ```
 
-Available agent labels: `python`, `node`, `go`, `rust`, `java`.
+### Environment variables in pipelines
+
+The `WOODPECKER_ENVIRONMENT` setting on the Woodpecker server injects
+custom env vars into all pipeline steps:
+
+```
+# In woodpecker-server.container:
+Environment=WOODPECKER_ENVIRONMENT=GITEA_TOKEN:<token>,GITEA_URL:http://10.89.1.4:3000
+```
+
+> **Important**: Use `$VAR` (no braces) for custom env vars in pipeline
+> commands. Woodpecker's pre-processor expands `${VAR}` at YAML parse time
+> and replaces unknown variables with empty strings. `$VAR` is safe because
+> the shell expands it at runtime.
+
+### Available agent labels: `python`, `node`, `go`, `rust`, `java`.
 
 ### Building Container Images
 
@@ -267,18 +336,29 @@ Use the [Woodpecker Podman plugin](https://woodpecker-ci.org/plugins/podman)
 to build and push OCI images from `Containerfile`. The plugin runs
 `podman build` + `podman push` inside the pipeline step.
 
+Container images are pushed to the local registry at `10.89.1.7:5000` with
+multiple tags:
+
+| Tag pattern | Example | When |
+|-------------|---------|------|
+| `<version>` | `0.0.1` | On release (auto-incremented) |
+| `latest` | `latest` | On master/main push |
+| `<sha>` | `e38bb860` | On every push |
+| `develop` | `develop` | On develop branch push |
+| `develop-<sha>` | `develop-e38bb860` | On develop push |
+
 ```yaml
   - name: container-build
     image: head1328/woodpecker-ci-plugin-podman
     privileged: true
     settings:
-      repo: 10.89.1.7:5000/my-app
+      repo: lab-python               # image name (without registry prefix)
       tags:
-        - "${CI_COMMIT_SHA:0:8}"
+        - "${CI_COMMIT_SHA:0:8}"      # short commit SHA
         - latest
-      registry: 10.89.1.7:5000
-      tls_verify: false
-      containerfile: Containerfile
+      registry: 10.89.1.7:5000        # registry hostname (no http://)
+      tls_verify: false               # required for insecure local registries
+      containerfile: Containerfile    # path to Containerfile
 ```
 
 Key settings:
