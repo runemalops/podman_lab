@@ -51,6 +51,18 @@ curl -s -o /dev/null -w "%{http_code}" https://ci.runemal.cloud
 
 ## Key Conventions
 
+### Podman preference
+This lab runs entirely on **podman**. Follow these conventions:
+- Use `Containerfile`, never `Dockerfile` — both work with podman, but
+  `Containerfile` signals intent and avoids Docker assumptions
+- Use the [Woodpecker Podman plugin](https://woodpecker-ci.org/plugins/podman)
+  (`head1328/woodpecker-ci-plugin-podman`) for CI image builds — it runs
+  `podman build` + `podman push` natively
+- Use full image names in Containerfiles (`docker.io/library/python:3.12-slim`)
+  to avoid short-name resolution errors in non-interactive podman
+- Prefer `podman` CLI commands in scripts and troubleshooting
+- Quadlet files use podman-native options (`PodmanArgs`, `Volume`, `Network`)
+
 ### Placeholder pattern
 - `__USER__` → replaced with `$USER` by `setup.sh` (non-path uses only)
 - `__UID__` → replaced with `$(id -u)` by `setup.sh`
