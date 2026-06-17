@@ -249,6 +249,30 @@ and `.woodpecker.yml` CI pipelines:
 Creates 5 repos: `lab-python`, `lab-node`, `lab-go`, `lab-rust`, `lab-java`.
 Each has source files, tests, and a CI pipeline targeting the matching agent.
 
+### Container image builds
+Use the [Woodpecker Podman plugin](https://woodpecker-ci.org/plugins/podman)
+to build and push OCI images from `Containerfile`:
+
+```yaml
+  - name: container-build
+    image: head1328/woodpecker-ci-plugin-podman
+    privileged: true
+    settings:
+      repo: 10.89.1.7:5000/my-app
+      tags:
+        - "${CI_COMMIT_SHA:0:8}"
+        - latest
+      registry: 10.89.1.7:5000
+      tls_verify: false
+      containerfile: Containerfile
+```
+
+- Runs `podman build` + `podman push` inside the step
+- Requires `privileged: true` and trusted repo setting
+- Use `Containerfile` (not `Dockerfile`) for podman-native builds
+- `registry` field has no `http://` prefix
+- Tags support shell expansion: `"${CI_COMMIT_SHA:0:8}"`
+
 ### Backup strategy
 - Daily `pg_dumpall` for PostgreSQL
 - Daily `tar -czf` for Gitea data and Registry blobs

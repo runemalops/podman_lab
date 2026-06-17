@@ -261,6 +261,36 @@ steps:
 
 Available agent labels: `python`, `node`, `go`, `rust`, `java`.
 
+### Building Container Images
+
+Use the [Woodpecker Podman plugin](https://woodpecker-ci.org/plugins/podman)
+to build and push OCI images from `Containerfile`. The plugin runs
+`podman build` + `podman push` inside the pipeline step.
+
+```yaml
+  - name: container-build
+    image: head1328/woodpecker-ci-plugin-podman
+    privileged: true
+    settings:
+      repo: 10.89.1.7:5000/my-app
+      tags:
+        - "${CI_COMMIT_SHA:0:8}"
+        - latest
+      registry: 10.89.1.7:5000
+      tls_verify: false
+      containerfile: Containerfile
+```
+
+Key settings:
+- `repo` — target image name (registry URL + image name)
+- `tags` — image tags (use `${CI_COMMIT_SHA:0:8}` for short SHA)
+- `registry` — registry hostname (no `http://` prefix)
+- `tls_verify: false` — required for insecure local registries
+- `containerfile` — path to Containerfile (defaults to `Containerfile`)
+
+> **Note**: The plugin requires `privileged: true` and the repo must be
+> marked as trusted in Woodpecker (Security & More → Trust repo).
+
 ## Backup & Restore
 
 - **Schedule**: Daily at 03:00 (systemd timer)
